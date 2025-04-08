@@ -1,0 +1,64 @@
+import 'dart:io';
+import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:rotulos/maps/inboxcontroller.dart';
+import 'package:rotulos/model/bd/bdapp.dart';
+
+class PhotoController extends GetxController {
+  InboxController inboxController = Get.put(InboxController());
+  final RxList<File> _image = <File>[].obs;
+  RxList<File> get images => _image;
+
+  Future<void> pickImagenes(bool fromCamera) async {
+    final picker = ImagePicker();
+
+    // Verificar el límite de imágenes
+    if (_image.length >= 1) {
+      Get.snackbar(
+        'Limite alcanzado',
+        'Solo se permiten una foto',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final pickerFile = await picker.pickImage(
+      source: fromCamera ? ImageSource.camera : ImageSource.gallery,
+    );
+
+    if (pickerFile != null) {
+      _image.add(File(pickerFile.path));
+    }
+  }
+
+  void removeImage(int index) async {
+    
+    if (index >= 0 && index < images.length) {
+      File imageFile = images[index];
+
+      // Verificar si la imagen existe en la base de datos
+      List<File> imagenesEnBD =
+          await DBLevantamiento.getImagenesPorIdentificador(inboxController.idformimagen.value);
+
+      bool imagenRegistrada =
+          imagenesEnBD.any((img) => img.path == imageFile.path);
+
+      if (imagenRegistrada) {
+        // Eliminar de la base de datos
+        await DBLevantamiento.eliminarImagen(inboxController.idformimagen.value, imageFile.path);
+
+        // Eliminar físicamente el archivo si existe
+        if (await imageFile.exists()) {
+          await imageFile.delete();
+        }
+      }
+
+      // Eliminar de la lista en memoria
+      images.removeAt(index);
+    }
+  }
+
+  void limpiarImages() {
+    _image.clear();
+  }
+}
